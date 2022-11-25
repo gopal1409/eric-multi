@@ -1,48 +1,37 @@
 pipeline {
+    environment {
+        registry = '44.205.13.75:8085/chatapp'
+        registryCredential = 'nexus-cred'
+        dockerImage= ''
+        tag = sh(returnStdout: true, script: "git rev-parse --short=10 HEAD").trim()
+    }
     agent any 
-    
     stages {
-        stage('code from scm') {
+        stage ('scm') {
             steps {
                 git credentialsId: 'git-pvtkey', url: 'git@github.com:gopal1409/eric-chat-app.git'
             }
         }
-        stage('mvn compile') {
+        stage ('build') {
             steps {
-                sh "mvn -B -DskipTests clean package"
+               sh 'mvn clean package'
             }
         }
-        stage('unit test') {
+        stage ('build image') {
             steps {
-        
-                sh "mvn test"
-                junit 'target/surefire-reports/*.xml'
+               script {
+                   dockerImage=docker.build registry + "$tag"
+               }
             }
         }
-         stage('checkstyle') {
+        stage ('push image') {
             steps {
-        
-                sh "mvn checkstyle:checkstyle"
-                recordIssues(tools: [checkStyle(pattern: '**/checkstyle-result.xml')])
-           
-            }
-        }
-  //      stage('sonar') {
-    //        steps {
-      //  
-          //      sh "mvn clean verify sonar:sonar \
-  //-Dsonar.projectKey=chatapp \
-  //-Dsonar.host.url=http://34.201.21.203:9000 \
-  //-Dsonar.login=sqp_769ca63848d49f62a970d0996c2adba2f42e66e4"
-               
-           
-    //        }
-      //  }
-        stage('nexus') {
-            steps {
-        
-               nexusArtifactUploader artifacts: [[artifactId: 'websocket-demo', classifier: '', file: 'target/websocket-demo-0.0.1-SNAPSHOT.jar', type: 'jar']], credentialsId: 'nexus-cred', groupId: 'websocket-demo', nexusUrl: '34.201.21.203:8081', nexusVersion: 'nexus3', protocol: 'http', repository: 'maven-snapshots', version: '0.0.1-SNAPSHOT'
-           
+               script {
+                   // This step should not normally be used in your script. Consult the inline help for details.
+                      docker.withRegistry('http://44.205.13.75:8085',registryCredential) {
+                       dockerImage.push()
+                     }
+               }
             }
         }
     }
